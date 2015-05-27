@@ -46,8 +46,14 @@ NUMBER_RE = re.compile('(\d+)')
 VERSION_STR = 'farcy v{0}'.format(__version__)
 MD_VERSION_STR = ('[{0}](https://github.com/appfolio/farcy)'
                   .format(VERSION_STR))
-PR_ISSUE_COMMENT_FORMAT = '_{0}_ {{0}}'.format(MD_VERSION_STR)
+PR_ISSUE_COMMENT_START = '_{0}_'.format(MD_VERSION_STR)
+PR_ISSUE_COMMENT_FORMAT = '{0} {{0}}'.format(PR_ISSUE_COMMENT_START)
 COMMIT_STATUS_FORMAT = '{0} {{0}}'.format(VERSION_STR)
+
+
+def is_farcy_comment(comment):
+    """Validates if comment made by Farcy."""
+    return comment.startswith(PR_ISSUE_COMMENT_START)
 
 
 class UTC(tzinfo):
@@ -229,6 +235,11 @@ class Farcy(object):
             self.log.debug('Sleeping for {0} seconds.'.format(sleep_time))
             time.sleep(sleep_time)
 
+    def farcy_review_comments(self, pr):
+        """Returns review comments created by Farcy."""
+        return (comment for comment in pr.review_comments()
+                if is_farcy_comment(comment.body))
+
     def get_issues(self, pfile):
         """Return a dictionary of issues for the file."""
         ext = os.path.splitext(pfile.filename)[1]
@@ -359,6 +370,9 @@ class Farcy(object):
         assert ref.startswith('refs/heads/')
         pull_request = self.open_prs.get(ref.rsplit('/', 1)[1])
         if pull_request:
+            if event.payload['forced']:
+                for comment in self.farcy_review_comments():
+                    comment.delete()
             self.handle_pr(pull_request)
 
     def run(self):
